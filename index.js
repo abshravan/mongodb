@@ -3,6 +3,7 @@ const readlineSync = require("readline-sync");
 
 const MONGO_URI = "mongodb://localhost:27017";
 const DB_NAME = "mydatabase";
+const COLLECTION_NAME = "callhistory";
 
 async function main() {
   // Get date range input from user
@@ -34,9 +35,7 @@ async function main() {
 
     const db = client.db(DB_NAME);
 
-    // Get collection name from user
-    const collectionName = readlineSync.question("Enter collection name: ");
-    const collection = db.collection(collectionName);
+    const collection = db.collection(COLLECTION_NAME);
 
     // Check the type of calltime in a sample document
     const sample = await collection.findOne({ calltime: { $exists: true } });
