@@ -19,11 +19,12 @@ async function main() {
     process.exit(1);
   }
 
-  // Build Date objects — start at beginning of day, end at end of day
-  const from = new Date(`${startDate}T00:00:00.000Z`);
-  const to = new Date(`${endDate}T23:59:59.999Z`);
+  const fromStr = `${startDate}T00:00:00.000+00:00`;
+  const toStr = `${endDate}T23:59:59.999+00:00`;
+  const fromDate = new Date(fromStr);
+  const toDate = new Date(toStr);
 
-  console.log(`\nQuerying calltime from ${from.toISOString()} to ${to.toISOString()} ...\n`);
+  console.log(`\nQuerying calltime from ${startDate} to ${endDate} ...\n`);
 
   const client = new MongoClient(MONGO_URI);
 
@@ -37,13 +38,30 @@ async function main() {
     const collectionName = readlineSync.question("Enter collection name: ");
     const collection = db.collection(collectionName);
 
-    // Query documents where calltime falls within the date range
-    const query = {
-      calltime: {
-        $gte: from,
-        $lte: to,
-      },
-    };
+    // Check the type of calltime in a sample document
+    const sample = await collection.findOne({ calltime: { $exists: true } });
+
+    if (!sample) {
+      console.log("No documents with 'calltime' field found in this collection.");
+      return;
+    }
+
+    const calltimeType = typeof sample.calltime;
+    console.log(`Detected calltime type: ${calltimeType} (value: ${sample.calltime})\n`);
+
+    let query;
+
+    if (sample.calltime instanceof Date) {
+      // calltime is stored as ISODate — use Date objects
+      query = {
+        calltime: { $gte: fromDate, $lte: toDate },
+      };
+    } else {
+      // calltime is stored as a string — use string comparison
+      query = {
+        calltime: { $gte: fromStr, $lte: toStr },
+      };
+    }
 
     const results = await collection.find(query).toArray();
 
