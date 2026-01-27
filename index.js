@@ -37,28 +37,43 @@ async function main() {
 
     const collection = db.collection(COLLECTION_NAME);
 
-    // Check the type of calltime in a sample document
-    const sample = await collection.findOne({ calltime: { $exists: true } });
+    // Fetch a sample document to inspect field names and types
+    const sample = await collection.findOne();
 
     if (!sample) {
-      console.log("No documents with 'calltime' field found in this collection.");
+      console.log("No documents found in this collection.");
       return;
     }
 
-    const calltimeType = typeof sample.calltime;
-    console.log(`Detected calltime type: ${calltimeType} (value: ${sample.calltime})\n`);
+    console.log("Sample document fields:");
+    console.log(JSON.stringify(sample, null, 2));
+    console.log();
+
+    // Find the date field — check common variations
+    const dateFieldName = ["calltime", "callTime", "call_time", "CallTime"].find(
+      (f) => sample[f] !== undefined
+    );
+
+    if (!dateFieldName) {
+      console.log("Could not find a calltime field. Available fields:");
+      console.log(Object.keys(sample).join(", "));
+      return;
+    }
+
+    const sampleValue = sample[dateFieldName];
+    console.log(`Using field: "${dateFieldName}" (type: ${typeof sampleValue}, value: ${sampleValue})\n`);
 
     let query;
 
-    if (sample.calltime instanceof Date) {
-      // calltime is stored as ISODate — use Date objects
+    if (sampleValue instanceof Date) {
+      // stored as ISODate — use Date objects
       query = {
-        calltime: { $gte: fromDate, $lte: toDate },
+        [dateFieldName]: { $gte: fromDate, $lte: toDate },
       };
     } else {
-      // calltime is stored as a string — use string comparison
+      // stored as a string — use string comparison
       query = {
-        calltime: { $gte: fromStr, $lte: toStr },
+        [dateFieldName]: { $gte: fromStr, $lte: toStr },
       };
     }
 
