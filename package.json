@@ -1,0 +1,13 @@
+{
+  "name": "mongodb-date-range-query",
+  "version": "1.0.0",
+  "description": "Query MongoDB documents by date range on calltime field",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "mongodb": "^6.3.0",
+    "readline-sync": "^1.4.10"
+  }
+}
