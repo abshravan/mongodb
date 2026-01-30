@@ -258,16 +258,48 @@ export function FlowEditor() {
       const run = json.run as Run;
       setLastRun(run);
 
-      // Highlight executed path.
-      const executedSet = new Set(run.path);
+      // Build execution order map: nodeId → 1-based step number.
+      const orderMap = new Map<string, number>();
+      run.path.forEach((id, i) => orderMap.set(id, i + 1));
+
+      // Build set of traversed edges (consecutive pairs in path).
+      const traversedEdges = new Set<string>();
+      for (let i = 0; i < run.path.length - 1; i++) {
+        traversedEdges.add(`${run.path[i]}→${run.path[i + 1]}`);
+      }
+
+      // Highlight nodes with execution order + LLM response preview.
       setNodes((nds) =>
-        nds.map((n) => ({
-          ...n,
-          data: { ...n.data, highlighted: executedSet.has(n.id) },
-        }))
+        nds.map((n) => {
+          const step = orderMap.get(n.id);
+          const nodeOutput = run.outputs[n.id];
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              highlighted: step != null,
+              executionOrder: step,
+              llmResponse: nodeOutput?.llmResponse,
+            },
+          };
+        })
+      );
+
+      // Highlight edges on the executed path.
+      setEdges((eds) =>
+        eds.map((e) => {
+          const isTraversed = traversedEdges.has(`${e.source}→${e.target}`);
+          return {
+            ...e,
+            animated: isTraversed,
+            style: isTraversed
+              ? { stroke: "#22c55e", strokeWidth: 2.5 }
+              : {},
+          };
+        })
       );
     },
-    [getCurrentFlow, setNodes]
+    [getCurrentFlow, setNodes, setEdges]
   );
 
   // ── Clear highlights ──
@@ -276,10 +308,22 @@ export function FlowEditor() {
     setNodes((nds) =>
       nds.map((n) => ({
         ...n,
-        data: { ...n.data, highlighted: false },
+        data: {
+          ...n.data,
+          highlighted: false,
+          executionOrder: undefined,
+          llmResponse: undefined,
+        },
       }))
     );
-  }, [setNodes]);
+    setEdges((eds) =>
+      eds.map((e) => ({
+        ...e,
+        animated: false,
+        style: {},
+      }))
+    );
+  }, [setNodes, setEdges]);
 
   // ── Minimap color ──
   const minimapNodeColor = useMemo(
