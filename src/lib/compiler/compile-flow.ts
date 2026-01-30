@@ -141,7 +141,7 @@ export function compileFlow(flow: Flow, options: CompileOptions = {}) {
     if (node.type === "end") continue; // END is built-in in LangGraph
 
     if (node.type === "start") {
-      graph.addNode(node.id, (state: typeof GraphAnnotation.State) => {
+      graph.addNode(node.id, () => {
         return {
           _path: [node.id],
         };
@@ -150,7 +150,7 @@ export function compileFlow(flow: Flow, options: CompileOptions = {}) {
     }
 
     if (node.type === "router") {
-      graph.addNode(node.id, (state: typeof GraphAnnotation.State) => {
+      graph.addNode(node.id, () => {
         return {
           _path: [node.id],
         };
@@ -200,9 +200,6 @@ export function compileFlow(flow: Flow, options: CompileOptions = {}) {
   const startNode = flow.nodes.find((n) => n.type === "start");
   if (!startNode) throw new Error("Flow has no start node.");
   graph.setEntryPoint(startNode.id);
-
-  // Set finish points.
-  const endNodes = flow.nodes.filter((n) => n.type === "end");
 
   for (const node of flow.nodes) {
     if (node.type === "end") continue;

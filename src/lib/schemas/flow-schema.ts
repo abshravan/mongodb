@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { NODE_TYPES } from "@/types/flow";
 
 // ---------------------------------------------------------------------------
 // Zod schemas – used to validate flow JSON at API boundaries.
