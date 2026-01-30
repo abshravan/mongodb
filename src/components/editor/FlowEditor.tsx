@@ -2,6 +2,7 @@
 
 import {
   ReactFlow,
+  ReactFlowProvider,
   Background,
   Controls,
   MiniMap,
@@ -345,61 +346,66 @@ export function FlowEditor() {
   );
 
   return (
-    <div className="flex h-screen w-screen">
-      {/* ── Left: Canvas ── */}
-      <div className="flex flex-col flex-1">
-        <Toolbar
-          flowName={flowName}
-          onFlowNameChange={setFlowName}
-          onAddNode={handleAddNode}
-          onSave={handleSave}
-          onOpenTest={() => setPanelMode("test")}
-        />
-        <div className="flex-1">
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onSelectionChange={onSelectionChange}
-            nodeTypes={nodeTypes}
-            fitView
-            defaultEdgeOptions={{
-              markerEnd: { type: MarkerType.ArrowClosed },
-            }}
-          >
-            <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-            <Controls />
-            <MiniMap nodeColor={minimapNodeColor} />
-          </ReactFlow>
+    <ReactFlowProvider>
+      <div style={{ display: "flex", width: "100vw", height: "100vh" }}>
+        {/* ── Left: Canvas ── */}
+        <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+          <Toolbar
+            flowName={flowName}
+            onFlowNameChange={setFlowName}
+            onAddNode={handleAddNode}
+            onSave={handleSave}
+            onOpenTest={() => setPanelMode("test")}
+          />
+          <div style={{ flex: 1, position: "relative" }}>
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onSelectionChange={onSelectionChange}
+              nodeTypes={nodeTypes}
+              fitView
+              defaultEdgeOptions={{
+                markerEnd: { type: MarkerType.ArrowClosed },
+              }}
+            >
+              <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+              <Controls />
+              <MiniMap nodeColor={minimapNodeColor} />
+            </ReactFlow>
+          </div>
+        </div>
+
+        {/* ── Right: Panels ── */}
+        <div
+          style={{ width: 380, borderLeft: "1px solid #e2e8f0", overflowY: "auto" }}
+          className="bg-slate-50"
+        >
+          {panelMode === "node" && selectedNode && (
+            <NodeEditorPanel
+              node={selectedNode}
+              onDataChange={handleNodeDataChange}
+              onClose={() => setPanelMode("test")}
+            />
+          )}
+          {panelMode === "edge" && selectedEdge && (
+            <EdgeEditorPanel
+              edge={selectedEdge}
+              onDataChange={handleEdgeDataChange}
+              onClose={() => setPanelMode("test")}
+            />
+          )}
+          {panelMode === "test" && (
+            <TestRunnerPanel
+              onExecute={handleExecute}
+              onClearHighlights={handleClearHighlights}
+              lastRun={lastRun}
+            />
+          )}
         </div>
       </div>
-
-      {/* ── Right: Panels ── */}
-      <div className="w-[380px] border-l border-slate-200 bg-slate-50 overflow-y-auto">
-        {panelMode === "node" && selectedNode && (
-          <NodeEditorPanel
-            node={selectedNode}
-            onDataChange={handleNodeDataChange}
-            onClose={() => setPanelMode("test")}
-          />
-        )}
-        {panelMode === "edge" && selectedEdge && (
-          <EdgeEditorPanel
-            edge={selectedEdge}
-            onDataChange={handleEdgeDataChange}
-            onClose={() => setPanelMode("test")}
-          />
-        )}
-        {panelMode === "test" && (
-          <TestRunnerPanel
-            onExecute={handleExecute}
-            onClearHighlights={handleClearHighlights}
-            lastRun={lastRun}
-          />
-        )}
-      </div>
-    </div>
+    </ReactFlowProvider>
   );
 }
