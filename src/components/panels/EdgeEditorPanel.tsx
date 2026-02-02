@@ -5,10 +5,11 @@ import { type Edge as RFEdge } from "@xyflow/react";
 interface Props {
   edge: RFEdge;
   onDataChange: (edgeId: string, data: Record<string, unknown>) => void;
+  onDelete: (edgeId: string) => void;
   onClose: () => void;
 }
 
-export function EdgeEditorPanel({ edge, onDataChange, onClose }: Props) {
+export function EdgeEditorPanel({ edge, onDataChange, onDelete, onClose }: Props) {
   const data = (edge.data ?? {}) as Record<string, unknown>;
 
   const update = (field: string, value: string) => {
@@ -51,6 +52,17 @@ export function EdgeEditorPanel({ edge, onDataChange, onClose }: Props) {
         Conditions are evaluated when the source is a router node.
         Supported operators: ==, !=, &gt;, &gt;=, &lt;, &lt;=
       </p>
+
+      {/* Delete button */}
+      <div className="pt-2 border-t border-slate-200">
+        <button
+          onClick={() => onDelete(edge.id)}
+          className="w-full text-xs font-medium px-3 py-2 rounded bg-red-50 text-red-600
+                     hover:bg-red-100 border border-red-200"
+        >
+          Delete Edge
+        </button>
+      </div>
     </div>
   );
 }

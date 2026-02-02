@@ -5,10 +5,11 @@ import { type Node } from "@xyflow/react";
 interface Props {
   node: Node;
   onDataChange: (nodeId: string, data: Record<string, unknown>) => void;
+  onDelete: (nodeId: string) => void;
   onClose: () => void;
 }
 
-export function NodeEditorPanel({ node, onDataChange, onClose }: Props) {
+export function NodeEditorPanel({ node, onDataChange, onDelete, onClose }: Props) {
   const data = node.data as Record<string, unknown>;
   const nodeType = node.type as string;
 
@@ -78,6 +79,17 @@ export function NodeEditorPanel({ node, onDataChange, onClose }: Props) {
           </label>
         </>
       )}
+
+      {/* Delete button */}
+      <div className="pt-2 border-t border-slate-200">
+        <button
+          onClick={() => onDelete(node.id)}
+          className="w-full text-xs font-medium px-3 py-2 rounded bg-red-50 text-red-600
+                     hover:bg-red-100 border border-red-200"
+        >
+          Delete Node
+        </button>
+      </div>
     </div>
   );
 }

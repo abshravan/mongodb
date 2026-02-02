@@ -8,6 +8,10 @@ interface Props {
   onAddNode: (type: NodeType) => void;
   onSave: () => void;
   onOpenTest: () => void;
+  saving?: boolean;
+  nodeCount?: number;
+  edgeCount?: number;
+  warnings?: string[];
 }
 
 const NODE_BUTTONS: { type: NodeType; label: string; color: string }[] = [
@@ -17,7 +21,17 @@ const NODE_BUTTONS: { type: NodeType; label: string; color: string }[] = [
   { type: "end", label: "+ End", color: "bg-red-100 hover:bg-red-200 text-red-700" },
 ];
 
-export function Toolbar({ flowName, onFlowNameChange, onAddNode, onSave, onOpenTest }: Props) {
+export function Toolbar({
+  flowName,
+  onFlowNameChange,
+  onAddNode,
+  onSave,
+  onOpenTest,
+  saving = false,
+  nodeCount = 0,
+  edgeCount = 0,
+  warnings = [],
+}: Props) {
   return (
     <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-200 bg-white">
       {/* Flow name */}
@@ -44,6 +58,21 @@ export function Toolbar({ flowName, onFlowNameChange, onAddNode, onSave, onOpenT
 
       <div className="flex-1" />
 
+      {/* Stats */}
+      <span className="text-xs text-slate-400">
+        {nodeCount} nodes &middot; {edgeCount} edges
+      </span>
+
+      {/* Warnings indicator */}
+      {warnings.length > 0 && (
+        <span
+          className="text-xs text-amber-600 font-medium cursor-default"
+          title={warnings.join("\n")}
+        >
+          {warnings.length} warning{warnings.length > 1 ? "s" : ""}
+        </span>
+      )}
+
       {/* Actions */}
       <button
         onClick={onOpenTest}
@@ -54,10 +83,14 @@ export function Toolbar({ flowName, onFlowNameChange, onAddNode, onSave, onOpenT
       </button>
       <button
         onClick={onSave}
-        className="text-xs font-medium px-3 py-1.5 rounded bg-green-600 text-white
-                   hover:bg-green-700"
+        disabled={saving}
+        className={`text-xs font-medium px-3 py-1.5 rounded text-white ${
+          saving
+            ? "bg-green-400 cursor-not-allowed"
+            : "bg-green-600 hover:bg-green-700"
+        }`}
       >
-        Save
+        {saving ? "Saving..." : "Save"}
       </button>
     </div>
   );

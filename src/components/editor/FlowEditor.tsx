@@ -18,7 +18,7 @@ import {
   BackgroundVariant,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useCallback, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { v4 as uuidv4 } from "uuid";
 
 import { StartNode } from "@/components/nodes/StartNode";
@@ -29,6 +29,7 @@ import { NodeEditorPanel } from "@/components/panels/NodeEditorPanel";
 import { EdgeEditorPanel } from "@/components/panels/EdgeEditorPanel";
 import { TestRunnerPanel } from "@/components/panels/TestRunnerPanel";
 import { Toolbar } from "@/components/toolbar/Toolbar";
+import { ToastContainer, showToast } from "@/components/Toast";
 import type { Flow, FlowNode, NodeType, Run } from "@/types/flow";
 
 // ---------------------------------------------------------------------------
@@ -118,6 +119,40 @@ function serializeToFlow(
 }
 
 // ---------------------------------------------------------------------------
+// Validation helpers
+// ---------------------------------------------------------------------------
+
+function getFlowWarnings(rfNodes: Node[], rfEdges: RFEdge[]): string[] {
+  const warnings: string[] = [];
+  const startCount = rfNodes.filter((n) => n.type === "start").length;
+  const endCount = rfNodes.filter((n) => n.type === "end").length;
+
+  if (rfNodes.length === 0) return warnings;
+  if (startCount === 0) warnings.push("No Start node");
+  if (startCount > 1) warnings.push("Multiple Start nodes");
+  if (endCount === 0) warnings.push("No End node");
+
+  for (const node of rfNodes) {
+    if (node.type === "end") continue;
+    const outgoing = rfEdges.filter((e) => e.source === node.id);
+    if (outgoing.length === 0) {
+      const label = (node.data as Record<string, unknown>).label as string;
+      warnings.push(`"${label}" has no outgoing edge`);
+    }
+  }
+
+  for (const node of rfNodes) {
+    if (node.type !== "prompt") continue;
+    const d = node.data as Record<string, unknown>;
+    if (!d.promptTemplate || (d.promptTemplate as string).trim() === "") {
+      warnings.push(`"${d.label}" has empty prompt`);
+    }
+  }
+
+  return warnings;
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -141,6 +176,12 @@ export function FlowEditor() {
   // ── Right panel mode ──
   const [panelMode, setPanelMode] = useState<"node" | "edge" | "test">("test");
 
+  // ── Save state ──
+  const [saving, setSaving] = useState(false);
+
+  // ── Validation ──
+  const warnings = useMemo(() => getFlowWarnings(nodes, edges), [nodes, edges]);
+
   // ── Connections ──
   const onConnect = useCallback(
     (params: Connection) => {
@@ -158,7 +199,7 @@ export function FlowEditor() {
     [setEdges]
   );
 
-  // ── Selection change ──
+  // ── Selection change ── Only switch panel when something is selected.
   const onSelectionChange = useCallback(
     ({ nodes: selNodes, edges: selEdges }: OnSelectionChangeParams) => {
       if (selNodes.length === 1) {
@@ -172,6 +213,7 @@ export function FlowEditor() {
       } else {
         setSelectedNode(null);
         setSelectedEdge(null);
+        // Do NOT auto-switch to "test" — keep whatever panel was open.
       }
     },
     []
@@ -183,8 +225,32 @@ export function FlowEditor() {
       const position = { x: 250 + Math.random() * 100, y: 100 + Math.random() * 200 };
       const newNode = createDefaultNode(type, position);
       setNodes((nds) => [...nds, newNode]);
+      showToast(`Added ${type} node`, "info");
     },
     [setNodes]
+  );
+
+  // ── Delete node ──
+  const handleDeleteNode = useCallback(
+    (nodeId: string) => {
+      setNodes((nds) => nds.filter((n) => n.id !== nodeId));
+      setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
+      setSelectedNode(null);
+      setPanelMode("test");
+      showToast("Node deleted", "info");
+    },
+    [setNodes, setEdges]
+  );
+
+  // ── Delete edge ──
+  const handleDeleteEdge = useCallback(
+    (edgeId: string) => {
+      setEdges((eds) => eds.filter((e) => e.id !== edgeId));
+      setSelectedEdge(null);
+      setPanelMode("test");
+      showToast("Edge deleted", "info");
+    },
+    [setEdges]
   );
 
   // ── Update node data from panel ──
@@ -228,19 +294,29 @@ export function FlowEditor() {
 
   // ── Save flow ──
   const handleSave = useCallback(async () => {
-    const flow = getCurrentFlow();
-    const res = await fetch("/api/flows", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(flow),
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      alert(`Save failed: ${err.error}\n${JSON.stringify(err.details ?? "")}`);
-      return;
+    if (saving) return;
+    setSaving(true);
+    try {
+      const flow = getCurrentFlow();
+      const res = await fetch("/api/flows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(flow),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        const detail = Array.isArray(err.details)
+          ? err.details.join("; ")
+          : err.details ?? "";
+        showToast(`Save failed: ${err.error}. ${detail}`, "error");
+        return;
+      }
+      versionRef.current += 1;
+      showToast("Flow saved", "success");
+    } finally {
+      setSaving(false);
     }
-    versionRef.current += 1;
-  }, [getCurrentFlow]);
+  }, [getCurrentFlow, saving]);
 
   // ── Execute flow ──
   const handleExecute = useCallback(
@@ -253,23 +329,24 @@ export function FlowEditor() {
       });
       const json = await res.json();
       if (!res.ok) {
-        alert(`Execution failed: ${json.error}\n${json.details ?? ""}`);
+        const detail = typeof json.details === "string" ? json.details : JSON.stringify(json.details ?? "");
+        showToast(`Execution failed: ${json.error}. ${detail}`, "error");
         return;
       }
       const run = json.run as Run;
       setLastRun(run);
+      showToast(`Flow executed — ${run.path.length} steps`, "success");
 
-      // Build execution order map: nodeId → 1-based step number.
+      // Build execution order map.
       const orderMap = new Map<string, number>();
       run.path.forEach((id, i) => orderMap.set(id, i + 1));
 
-      // Build set of traversed edges (consecutive pairs in path).
+      // Build set of traversed edges.
       const traversedEdges = new Set<string>();
       for (let i = 0; i < run.path.length - 1; i++) {
         traversedEdges.add(`${run.path[i]}→${run.path[i + 1]}`);
       }
 
-      // Highlight nodes with execution order + LLM response preview.
       setNodes((nds) =>
         nds.map((n) => {
           const step = orderMap.get(n.id);
@@ -286,7 +363,6 @@ export function FlowEditor() {
         })
       );
 
-      // Highlight edges on the executed path.
       setEdges((eds) =>
         eds.map((e) => {
           const isTraversed = traversedEdges.has(`${e.source}→${e.target}`);
@@ -326,6 +402,31 @@ export function FlowEditor() {
     );
   }, [setNodes, setEdges]);
 
+  // ── Keyboard shortcuts ──
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Ctrl+S / Cmd+S — Save
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        handleSave();
+      }
+      // Delete/Backspace — Delete selected node or edge (only when not in an input)
+      if (e.key === "Delete" || e.key === "Backspace") {
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA") return;
+        if (selectedNode) {
+          e.preventDefault();
+          handleDeleteNode(selectedNode.id);
+        } else if (selectedEdge) {
+          e.preventDefault();
+          handleDeleteEdge(selectedEdge.id);
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [handleSave, handleDeleteNode, handleDeleteEdge, selectedNode, selectedEdge]);
+
   // ── Minimap color ──
   const minimapNodeColor = useMemo(
     () => (node: Node) => {
@@ -356,6 +457,10 @@ export function FlowEditor() {
             onAddNode={handleAddNode}
             onSave={handleSave}
             onOpenTest={() => setPanelMode("test")}
+            saving={saving}
+            nodeCount={nodes.length}
+            edgeCount={edges.length}
+            warnings={warnings}
           />
           <div style={{ flex: 1, position: "relative" }}>
             <ReactFlow
@@ -367,6 +472,7 @@ export function FlowEditor() {
               onSelectionChange={onSelectionChange}
               nodeTypes={nodeTypes}
               fitView
+              deleteKeyCode={null}
               defaultEdgeOptions={{
                 markerEnd: { type: MarkerType.ArrowClosed },
               }}
@@ -383,10 +489,35 @@ export function FlowEditor() {
           style={{ width: 380, borderLeft: "1px solid #e2e8f0", overflowY: "auto" }}
           className="bg-slate-50"
         >
+          {/* Panel tabs */}
+          <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0" }}>
+            {(["test", "node", "edge"] as const).map((tab) => {
+              const disabled =
+                (tab === "node" && !selectedNode) || (tab === "edge" && !selectedEdge);
+              return (
+                <button
+                  key={tab}
+                  onClick={() => !disabled && setPanelMode(tab)}
+                  disabled={disabled}
+                  className={`flex-1 text-xs font-medium py-2 ${
+                    panelMode === tab
+                      ? "text-blue-600 border-b-2 border-blue-600 bg-white"
+                      : disabled
+                        ? "text-slate-300 cursor-not-allowed"
+                        : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  {tab === "test" ? "Test" : tab === "node" ? "Node" : "Edge"}
+                </button>
+              );
+            })}
+          </div>
+
           {panelMode === "node" && selectedNode && (
             <NodeEditorPanel
               node={selectedNode}
               onDataChange={handleNodeDataChange}
+              onDelete={handleDeleteNode}
               onClose={() => setPanelMode("test")}
             />
           )}
@@ -394,6 +525,7 @@ export function FlowEditor() {
             <EdgeEditorPanel
               edge={selectedEdge}
               onDataChange={handleEdgeDataChange}
+              onDelete={handleDeleteEdge}
               onClose={() => setPanelMode("test")}
             />
           )}
@@ -406,6 +538,7 @@ export function FlowEditor() {
           )}
         </div>
       </div>
+      <ToastContainer />
     </ReactFlowProvider>
   );
 }
