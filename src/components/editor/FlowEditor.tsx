@@ -166,9 +166,19 @@ export function FlowEditor() {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<RFEdge>([]);
 
-  // ── Selection ──
-  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
-  const [selectedEdge, setSelectedEdge] = useState<RFEdge | null>(null);
+  // ── Selection (store IDs, derive actual objects) ──
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+
+  // Derive selected node/edge from arrays so edits are reflected immediately
+  const selectedNode = useMemo(
+    () => (selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) ?? null : null),
+    [nodes, selectedNodeId]
+  );
+  const selectedEdge = useMemo(
+    () => (selectedEdgeId ? edges.find((e) => e.id === selectedEdgeId) ?? null : null),
+    [edges, selectedEdgeId]
+  );
 
   // ── Execution result ──
   const [lastRun, setLastRun] = useState<Run | null>(null);
@@ -203,16 +213,16 @@ export function FlowEditor() {
   const onSelectionChange = useCallback(
     ({ nodes: selNodes, edges: selEdges }: OnSelectionChangeParams) => {
       if (selNodes.length === 1) {
-        setSelectedNode(selNodes[0]);
-        setSelectedEdge(null);
+        setSelectedNodeId(selNodes[0].id);
+        setSelectedEdgeId(null);
         setPanelMode("node");
       } else if (selEdges.length === 1) {
-        setSelectedEdge(selEdges[0]);
-        setSelectedNode(null);
+        setSelectedEdgeId(selEdges[0].id);
+        setSelectedNodeId(null);
         setPanelMode("edge");
       } else {
-        setSelectedNode(null);
-        setSelectedEdge(null);
+        setSelectedNodeId(null);
+        setSelectedEdgeId(null);
         // Do NOT auto-switch to "test" — keep whatever panel was open.
       }
     },
@@ -235,7 +245,7 @@ export function FlowEditor() {
     (nodeId: string) => {
       setNodes((nds) => nds.filter((n) => n.id !== nodeId));
       setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
-      setSelectedNode(null);
+      setSelectedNodeId(null);
       setPanelMode("test");
       showToast("Node deleted", "info");
     },
@@ -246,7 +256,7 @@ export function FlowEditor() {
   const handleDeleteEdge = useCallback(
     (edgeId: string) => {
       setEdges((eds) => eds.filter((e) => e.id !== edgeId));
-      setSelectedEdge(null);
+      setSelectedEdgeId(null);
       setPanelMode("test");
       showToast("Edge deleted", "info");
     },
